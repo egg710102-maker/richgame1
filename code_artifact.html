@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>樂活平安大富翁 - 壽豐鄉部落健康營造中心</title>
+    <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, '微軟正黑體', sans-serif; background-color: #f0fdf4; user-select: none; }
+        .card-flip { transition: transform 0.6s; transform-style: preserve-3d; }
+        .card-flip.flipped { transform: rotateY(180deg); }
+        .card-front, .card-back { backface-visibility: hidden; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .card-back { transform: rotateY(180deg); }
+        
+        @keyframes bounce-toss {
+            0% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+            100% { transform: translateY(0); }
+        }
+        .animate-toss { animation: bounce-toss 0.5s ease-in-out; }
+        
+        @keyframes roll-dice {
+            0% { transform: rotate(0deg) scale(1); }
+            25% { transform: rotate(90deg) scale(1.2); }
+            50% { transform: rotate(180deg) scale(0.8); }
+            75% { transform: rotate(270deg) scale(1.1); }
+            100% { transform: rotate(360deg) scale(1); }
+        }
+        .rolling { animation: roll-dice 0.6s ease-in-out; }
+
+        @keyframes spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin-slow { animation: spin-slow 12s linear infinite; }
+
+        .player-token { transition: all 0.5s ease; }
+        
+        /* 隱藏捲軸但可滑動 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const CHANCE_CARDS = [
+            { id: 1, title: "多喝溫水", desc: "今天喝了一杯溫開水，對身體很好！", points: 2, type: "health" },
+            { id: 2, title: "營養均衡", desc: "吃了一顆蛋或豆腐，補充肌肉營養！", points: 2, type: "health" },
+            { id: 3, title: "開心果", desc: "對著大家保持微笑 5 秒鐘，好運連連！", points: 2, type: "psych" },
+            { id: 4, title: "防詐達人", desc: "分享一個防詐騙的小招數！", points: 3, type: "disaster" },
+            { id: 5, title: "活力滿滿", desc: "跟著大家一起雙手舉高，伸個大懶腰！", points: 2, type: "exercise" },
+            { id: 6, title: "互相鼓勵", desc: "和旁邊的玩家擊掌，慶祝今天好天氣！", points: 2, type: "psych" },
+            { id: 7, title: "眼明手快", desc: "幫旁邊的玩家捏捏肩膀 3 下，放鬆一下！", points: 2, type: "exercise" },
+            { id: 8, title: "敦親睦鄰", desc: "大聲稱讚旁邊的玩家一句話！", points: 2, type: "psych" },
+            { id: 9, title: "地震口訣", desc: "大聲唸出：趴下、掩護、穩住！", points: 3, type: "disaster" },
+            { id: 10, title: "用火安全", desc: "檢查家裡的瓦斯爐有沒有關好！", points: 2, type: "disaster" },
+            { id: 11, title: "動動腳踝", desc: "坐在椅子上，轉動雙腳腳踝 5 圈！", points: 2, type: "exercise" },
+            { id: 12, title: "深呼吸", desc: "閉上眼睛，深深吸氣、慢慢吐氣 3 次！", points: 2, type: "psych" }
+        ];
+
+        const FATE_CARDS = [
+            { id: 1, title: "忘記喝水", desc: "口乾舌燥！快點喝一口水補充水分。", points: 1, type: "health", actionText: "我有喝水補救" },
+            { id: 2, title: "走路分心", desc: "走路沒看路差點跌倒！請原地踏步 10 下練腿力。", points: 2, type: "exercise", actionText: "我有踏步補救" },
+            { id: 3, title: "忘記吃藥", desc: "忘記吃藥是不行的喔！請跟著唸：我會按時吃藥！", points: 1, type: "health", actionText: "我有唸出來" },
+            { id: 4, title: "筋骨僵硬", desc: "坐太久了！請站起來（或坐著）扭扭腰 3 下。", points: 2, type: "exercise", actionText: "我有扭扭腰" },
+            { id: 5, title: "錯誤逃生", desc: "地震來不可以搭電梯！請唸出：停電不搭電梯。", points: 2, type: "disaster", actionText: "我有記住了" },
+            { id: 6, title: "跌倒危機", desc: "浴室地板濕滑很危險！請分享一個防跌倒秘訣。", points: 2, type: "disaster", actionText: "我有分享" },
+            { id: 7, title: "心情鬱悶", desc: "心情悶悶的？請對大家大笑三聲：哈哈哈！", points: 2, type: "psych", actionText: "我有大笑" },
+            { id: 8, title: "挑食不好", desc: "青菜吃太少！請大聲說出一種你喜歡的蔬菜。", points: 1, type: "health", actionText: "我有說出來" }
+        ];
+
+        const PLAYER_COLORS = ["#EF4444", "#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899"];
+        const WINNING_SCORE = 20;
+
+        const Mascot = ({ isThrowing }) => (
+            <div className={`relative w-40 h-40 mx-auto ${isThrowing ? 'animate-toss' : ''}`}>
+                <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="w-full h-full drop-shadow-lg">
+                    {/* 頭帶 */}
+                    <path d="M50 60 Q100 40 150 60 L145 75 Q100 55 55 75 Z" fill="#E11D48"/>
+                    <rect x="90" y="48" width="20" height="15" fill="#FFFFFF"/>
+                    {/* 臉部 */}
+                    <circle cx="100" cy="90" r="45" fill="#FDE047" stroke="#CA8A04" strokeWidth="4"/>
+                    {/* 眼睛 */}
+                    <circle cx="85" cy="85" r="6" fill="#1F2937"/>
+                    <circle cx="115" cy="85" r="6" fill="#1F2937"/>
+                    {/* 腮紅 */}
+                    <circle cx="70" cy="95" r="8" fill="#FCA5A5" opacity="0.6"/>
+                    <circle cx="130" cy="95" r="8" fill="#FCA5A5" opacity="0.6"/>
+                    {/* 嘴巴 */}
+                    <path d="M 85 105 Q 100 120 115 105" stroke="#1F2937" strokeWidth="4" fill="transparent" strokeLinecap="round"/>
+                    {/* 身體 (部落圖騰風) */}
+                    <path d="M 70 135 L 130 135 L 140 190 L 60 190 Z" fill="#047857"/>
+                    <path d="M 80 135 L 120 135 L 125 190 L 75 190 Z" fill="#10B981"/>
+                    <polygon points="100,140 90,160 110,160" fill="#FFFFFF"/>
+                    <polygon points="100,165 90,185 110,185" fill="#FFFFFF"/>
+                    {/* 手 (舉起或放下) */}
+                    {isThrowing ? (
+                        <g>
+                            <path d="M 70 145 Q 40 110 50 80" stroke="#FDE047" strokeWidth="12" strokeLinecap="round" fill="transparent"/>
+                            <path d="M 130 145 Q 160 110 150 80" stroke="#FDE047" strokeWidth="12" strokeLinecap="round" fill="transparent"/>
+                        </g>
+                    ) : (
+                        <g>
+                            <path d="M 70 145 Q 40 160 50 180" stroke="#FDE047" strokeWidth="12" strokeLinecap="round" fill="transparent"/>
+                            <path d="M 130 145 Q 160 160 150 180" stroke="#FDE047" strokeWidth="12" strokeLinecap="round" fill="transparent"/>
+                        </g>
+                    )}
+                </svg>
+            </div>
+        );
+
+        const SetupScreen = ({ onStart }) => {
+            const [players, setPlayers] = React.useState(2);
+            const [dice, setDice] = React.useState(1);
+            const [difficulty, setDifficulty] = React.useState(16); // 設定為偶數比較好排圓圈
+
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-green-50 relative overflow-hidden">
+                    {/* 裝飾性背景圖案 */}
+                    <div className="absolute top-10 left-10 opacity-20"><i className="fas fa-leaf text-9xl text-green-500"></i></div>
+                    <div className="absolute bottom-10 right-10 opacity-20"><i className="fas fa-sun text-9xl text-yellow-500"></i></div>
+
+                    <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-2xl w-full border-4 border-green-500 text-center relative z-10">
+                        <h1 className="text-5xl font-bold text-green-700 mb-6 tracking-wide">
+                            <i className="fas fa-leaf mr-4 text-green-500"></i>樂活平安大富翁
+                        </h1>
+                        <p className="text-2xl text-gray-600 mb-8">歡迎來到健康部落！請設定遊戲：</p>
+                        
+                        <div className="space-y-6">
+                            <div className="flex flex-col md:flex-row items-center justify-between bg-green-100 p-4 rounded-2xl">
+                                <label className="text-3xl font-bold text-green-800 mb-2 md:mb-0">遊玩人數</label>
+                                <div className="flex space-x-4">
+                                    {[2, 3, 4, 5, 6].map(num => (
+                                        <button key={num} 
+                                            onClick={() => setPlayers(num)}
+                                            className={`w-16 h-16 rounded-full text-3xl font-bold transition ${players === num ? 'bg-green-600 text-white shadow-lg scale-110' : 'bg-white text-green-600 border-2 border-green-400'}`}>
+                                            {num}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col md:flex-row items-center justify-between bg-orange-100 p-4 rounded-2xl">
+                                <label className="text-3xl font-bold text-orange-800 mb-2 md:mb-0">骰子數量</label>
+                                <div className="flex space-x-4">
+                                    {[1, 2].map(num => (
+                                        <button key={num} 
+                                            onClick={() => setDice(num)}
+                                            className={`px-6 py-3 rounded-2xl text-3xl font-bold transition ${dice === num ? 'bg-orange-500 text-white shadow-lg scale-110' : 'bg-white text-orange-500 border-2 border-orange-400'}`}>
+                                            {num} 顆
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col md:flex-row items-center justify-between bg-blue-100 p-4 rounded-2xl">
+                                <label className="text-3xl font-bold text-blue-800 mb-2 md:mb-0">地圖大小</label>
+                                <div className="flex space-x-4">
+                                    <button onClick={() => setDifficulty(16)} className={`px-6 py-3 rounded-2xl text-2xl font-bold ${difficulty === 16 ? 'bg-blue-500 text-white shadow-lg scale-110' : 'bg-white text-blue-500 border-2 border-blue-400'}`}>小圈 (16格)</button>
+                                    <button onClick={() => setDifficulty(24)} className={`px-6 py-3 rounded-2xl text-2xl font-bold ${difficulty === 24 ? 'bg-blue-500 text-white shadow-lg scale-110' : 'bg-white text-blue-500 border-2 border-blue-400'}`}>大圈 (24格)</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={() => onStart({ players, dice, difficulty })}
+                            className="mt-10 bg-red-500 hover:bg-red-600 text-white text-4xl font-bold py-6 px-16 rounded-full shadow-xl transition transform hover:scale-105 active:scale-95">
+                            開始遊戲 <i className="fas fa-play-circle ml-2"></i>
+                        </button>
+
+                        {/* 新增設計者資訊 */}
+                        <div className="mt-8 pt-6 border-t-2 border-green-200">
+                            <p className="text-xl font-bold text-green-800 bg-green-100 inline-block px-6 py-2 rounded-full shadow-sm">
+                                <i className="fas fa-heart text-pink-500 mr-2"></i>設計者：壽豐鄉部落健康營造中心
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const Dice = ({ value, rolling }) => {
+            const dots = {
+                1: ['center'],
+                2: ['top-right', 'bottom-left'],
+                3: ['top-right', 'center', 'bottom-left'],
+                4: ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+                5: ['top-left', 'top-right', 'center', 'bottom-left', 'bottom-right'],
+                6: ['top-left', 'top-right', 'middle-left', 'middle-right', 'bottom-left', 'bottom-right']
+            };
+
+            return (
+                <div className={`w-20 h-20 bg-white rounded-2xl shadow-md border-4 border-gray-200 relative ${rolling ? 'rolling' : ''}`}>
+                    {(dots[value] || []).map((pos, i) => {
+                        let style = {};
+                        if (pos.includes('top')) style.top = '15%';
+                        if (pos.includes('bottom')) style.bottom = '15%';
+                        if (pos.includes('middle')) style.top = '43%';
+                        if (pos.includes('center')) { style.top = '43%'; style.left = '43%'; }
+                        if (pos.includes('left')) style.left = '15%';
+                        if (pos.includes('right')) style.right = '15%';
+                        
+                        return <div key={i} className="absolute w-4 h-4 bg-red-500 rounded-full" style={style}></div>;
+                    })}
+                </div>
+            );
+        };
+
+        const CardModal = ({ card, type, onAction }) => {
+            const [flipped, setFlipped] = React.useState(false);
+            
+            const isChance = type === 'chance';
+            const cardBg = isChance ? 'bg-yellow-400' : 'bg-blue-400';
+            const textColor = isChance ? 'text-yellow-900' : 'text-blue-900';
+            const icon = isChance ? 'fa-sun text-red-500' : 'fa-cloud-showers-heavy text-white';
+            const titleText = isChance ? '機會卡' : '命運卡';
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
+                    <div className="w-full max-w-2xl" style={{ perspective: '1000px' }}>
+                        <div className={`relative w-full h-[500px] card-flip ${flipped ? 'flipped' : ''}`}>
+                            {/* 卡片背面 (未翻開) */}
+                            <div 
+                                className={`card-front ${cardBg} rounded-3xl shadow-2xl flex flex-col items-center justify-center cursor-pointer border-8 border-white hover:scale-105 transition`}
+                                onClick={() => setFlipped(true)}
+                            >
+                                <i className={`fas ${icon} text-9xl mb-8 animate-bounce`}></i>
+                                <h2 className={`text-6xl font-bold ${textColor}`}>抽一張{titleText}</h2>
+                                <p className="text-3xl mt-6 font-bold text-white bg-black bg-opacity-30 px-6 py-2 rounded-full">請點一下翻牌</p>
+                            </div>
+
+                            {/* 卡片正面 (已翻開) */}
+                            <div className={`card-back bg-white rounded-3xl shadow-2xl flex flex-col p-8 border-8 ${isChance ? 'border-yellow-400' : 'border-blue-400'}`}>
+                                <div className="text-center mb-6">
+                                    <span className={`inline-block px-6 py-2 rounded-full text-2xl font-bold ${cardBg} text-white mb-4`}>
+                                        {titleText}
+                                    </span>
+                                    <h2 className="text-5xl font-bold text-gray-800">{card.title}</h2>
+                                </div>
+                                
+                                <div className="flex-grow flex items-center justify-center bg-gray-50 rounded-2xl p-6 mb-8 border-2 border-gray-200">
+                                    <p className="text-4xl leading-relaxed text-gray-700 text-center font-bold">
+                                        {card.desc}
+                                    </p>
+                                </div>
+
+                                <div className="text-center mb-6">
+                                    <p className="text-3xl font-bold text-red-500">
+                                        完成可獲得 <span className="text-5xl">{card.points}</span> 分！
+                                    </p>
+                                </div>
+
+                                <div className="flex justify-between space-x-6">
+                                    <button 
+                                        onClick={() => onAction(false)}
+                                        className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 text-3xl font-bold py-5 rounded-2xl transition">
+                                        <i className="fas fa-times-circle mr-2"></i> 下次努力
+                                    </button>
+                                    <button 
+                                        onClick={() => onAction(true)}
+                                        className="flex-1 bg-green-500 hover:bg-green-600 text-white text-3xl font-bold py-5 rounded-2xl shadow-lg transition transform active:scale-95">
+                                        <i className="fas fa-check-circle mr-2"></i> {isChance ? '我有做到！' : card.actionText}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const WinnerModal = ({ winner, onRestart }) => (
+            <div className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-3xl p-10 max-w-2xl w-full text-center border-8 border-yellow-400 shadow-2xl animate-bounce-short">
+                    <i className="fas fa-crown text-yellow-500 text-9xl mb-6"></i>
+                    <h1 className="text-6xl font-bold text-red-600 mb-4">恭喜獲勝！</h1>
+                    <p className="text-4xl text-gray-700 mb-10 font-bold">
+                        玩家 {winner.id} 率先獲得滿分 20 分，<br/>是今天的健康大富翁！
+                    </p>
+                    <button 
+                        onClick={onRestart}
+                        className="bg-blue-500 hover:bg-blue-600 text-white text-4xl font-bold py-6 px-16 rounded-full shadow-xl transition transform hover:scale-105">
+                        再玩一次 <i className="fas fa-redo ml-2"></i>
+                    </button>
+                </div>
+            </div>
+        );
+
+        const GameScreen = ({ config, onRestart }) => {
+            const [players, setPlayers] = React.useState(
+                Array.from({ length: config.players }).map((_, i) => ({
+                    id: i + 1,
+                    color: PLAYER_COLORS[i],
+                    pos: 0,
+                    score: 0
+                }))
+            );
+            const [turn, setTurn] = React.useState(0);
+            const [diceVals, setDiceVals] = React.useState(config.dice === 2 ? [1, 1] : [1]);
+            const [isRolling, setIsRolling] = React.useState(false);
+            const [activeCard, setActiveCard] = React.useState(null);
+            const [winner, setWinner] = React.useState(null);
+
+            // Generate Board Cells
+            const boardCells = React.useMemo(() => {
+                const cells = [];
+                for (let i = 0; i < config.difficulty; i++) {
+                    let type = "health";
+                    let label = "健康";
+                    let color = "bg-green-100 border-green-400 text-green-700";
+                    let icon = "fa-apple-alt";
+
+                    if (i === 0) {
+                        type = "start"; label = "起點"; color = "bg-red-100 border-red-500 text-red-600"; icon = "fa-flag";
+                    } else if (i % 5 === 0) {
+                        type = "chance"; label = "機會"; color = "bg-yellow-100 border-yellow-500 text-yellow-700"; icon = "fa-sun";
+                    } else if (i % 7 === 0) {
+                        type = "fate"; label = "命運"; color = "bg-blue-100 border-blue-500 text-blue-700"; icon = "fa-cloud-showers-heavy";
+                    } else if (i % 2 === 0) {
+                        type = "disaster"; label = "防災"; color = "bg-orange-100 border-orange-400 text-orange-700"; icon = "fa-hard-hat";
+                    }
+
+                    cells.push({ id: i, type, label, color, icon });
+                }
+                return cells;
+            }, [config.difficulty]);
+
+            const handleRoll = () => {
+                if (isRolling || activeCard || winner) return;
+                
+                setIsRolling(true);
+                
+                setTimeout(() => {
+                    const d1 = Math.floor(Math.random() * 6) + 1;
+                    const d2 = config.dice === 2 ? Math.floor(Math.random() * 6) + 1 : 0;
+                    const steps = d1 + d2;
+                    
+                    setDiceVals(config.dice === 2 ? [d1, d2] : [d1]);
+                    setIsRolling(false);
+                    movePlayer(steps);
+                }, 1000);
+            };
+
+            const movePlayer = (steps) => {
+                setPlayers(prev => {
+                    const newPlayers = [...prev];
+                    let newPos = newPlayers[turn].pos + steps;
+                    
+                    if (newPos >= boardCells.length) {
+                        newPos = newPos % boardCells.length;
+                    }
+                    
+                    newPlayers[turn].pos = newPos;
+                    
+                    setTimeout(() => checkCellAction(newPos, newPlayers[turn]), 600);
+                    
+                    return newPlayers;
+                });
+            };
+
+            const checkCellAction = (pos, player) => {
+                const cell = boardCells[pos];
+                if (cell.type === 'chance' || cell.type === 'health') {
+                    const randomCard = CHANCE_CARDS[Math.floor(Math.random() * CHANCE_CARDS.length)];
+                    setActiveCard({ card: randomCard, type: 'chance', playerId: player.id });
+                } else if (cell.type === 'fate' || cell.type === 'disaster') {
+                    const randomCard = FATE_CARDS[Math.floor(Math.random() * FATE_CARDS.length)];
+                    setActiveCard({ card: randomCard, type: 'fate', playerId: player.id });
+                } else {
+                    nextTurn();
+                }
+            };
+
+            const handleCardAction = (completed) => {
+                const curPlayerId = activeCard.playerId;
+                const points = completed ? activeCard.card.points : 0;
+
+                setPlayers(prev => {
+                    const newPlayers = [...prev];
+                    const pIndex = newPlayers.findIndex(p => p.id === curPlayerId);
+                    newPlayers[pIndex].score += points;
+                    
+                    if (newPlayers[pIndex].score >= WINNING_SCORE) {
+                        setWinner(newPlayers[pIndex]);
+                    }
+                    return newPlayers;
+                });
+
+                setActiveCard(null);
+                if (!winner) nextTurn();
+            };
+
+            const nextTurn = () => {
+                setTurn(prev => (prev + 1) % config.players);
+            };
+
+            return (
+                <div className="flex flex-col md:flex-row h-screen bg-[#f0fdf4] font-sans">
+                    {/* 左側資訊欄 (計分板與骰子區) */}
+                    <div className="w-full md:w-[350px] lg:w-[400px] bg-white shadow-2xl flex flex-col p-6 z-20 border-r-4 border-green-200 overflow-y-auto no-scrollbar flex-shrink-0">
+                        <div className="text-center mb-6 bg-green-100 rounded-2xl p-4 shadow-sm">
+                            <h2 className="text-4xl font-bold text-green-800">輪到玩家 <span className="text-red-500 text-5xl">{turn + 1}</span></h2>
+                        </div>
+
+                        {/* 阿布與骰子 */}
+                        <div className="flex-grow flex flex-col items-center justify-center mb-6">
+                            <Mascot isThrowing={isRolling} />
+                            
+                            <div className="flex space-x-4 my-6 min-h-[5rem]">
+                                {diceVals.map((val, i) => (
+                                    <Dice key={i} value={val} rolling={isRolling} />
+                                ))}
+                            </div>
+
+                            <button 
+                                onClick={handleRoll}
+                                disabled={isRolling || activeCard}
+                                className={`w-full text-4xl font-bold py-6 rounded-2xl shadow-lg transition transform ${isRolling ? 'bg-gray-400 text-gray-200' : 'bg-red-500 hover:bg-red-600 text-white hover:scale-105 active:scale-95'}`}>
+                                <i className="fas fa-dice mr-2"></i> 請擲骰子
+                            </button>
+                        </div>
+
+                        {/* 計分板 */}
+                        <div className="bg-orange-50 rounded-2xl p-4 border-2 border-orange-200 shadow-sm">
+                            <h3 className="text-2xl font-bold text-orange-800 mb-4 border-b-2 border-orange-200 pb-2">
+                                <i className="fas fa-star mr-2 text-yellow-500"></i>積分排行榜 (滿分20)
+                            </h3>
+                            <div className="space-y-3">
+                                {players.map((p, idx) => (
+                                    <div key={p.id} className={`flex justify-between items-center p-3 rounded-xl transition-all duration-300 ${idx === turn ? 'bg-orange-200 shadow-md transform scale-105 border-2 border-orange-400' : 'bg-white border-2 border-transparent'}`}>
+                                        <div className="flex items-center text-2xl font-bold">
+                                            <div className="w-8 h-8 rounded-full mr-3 shadow-md border-2 border-white flex items-center justify-center text-white text-sm" style={{ backgroundColor: p.color }}>
+                                                {p.id}
+                                            </div>
+                                            玩家 {p.id}
+                                        </div>
+                                        <div className="text-3xl font-bold text-red-600 bg-red-50 px-3 py-1 rounded-lg">
+                                            {p.score} <span className="text-lg text-gray-500">分</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 右側地圖區 - 圓形排列 */}
+                    <div className="flex-1 p-4 md:p-8 overflow-auto relative flex items-center justify-center bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-green-50/50">
+                        {/* 遊戲板容器 - 保持正方形以繪製完美的圓 */}
+                        <div className="relative w-[600px] h-[600px] md:w-[750px] md:h-[750px] lg:w-[850px] lg:h-[850px] flex-shrink-0 rounded-full border-[12px] border-green-200 shadow-[inset_0_0_50px_rgba(0,0,0,0.1)] bg-white bg-opacity-60 my-10 mx-auto">
+                            
+                            {/* 中間可愛圖案與設計者資訊 */}
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                                {/* 動態天空裝飾 */}
+                                <div className="flex space-x-12 mb-6 items-center">
+                                    <i className="fas fa-sun text-yellow-400 text-[80px] animate-spin-slow drop-shadow-md"></i>
+                                    <i className="fas fa-cloud text-blue-300 text-[60px] animate-bounce drop-shadow-sm" style={{ animationDuration: '3s' }}></i>
+                                    <i className="fas fa-tree text-green-500 text-[80px] drop-shadow-md"></i>
+                                </div>
+                                
+                                <h1 className="text-5xl lg:text-6xl font-black text-green-700 mb-4 drop-shadow-sm tracking-wide">
+                                    樂活平安大富翁
+                                </h1>
+                                
+                                <div className="bg-gradient-to-r from-green-100 to-green-50 px-8 py-3 rounded-full border-4 border-green-400 shadow-lg mt-2 transform -rotate-2">
+                                    <p className="text-2xl lg:text-3xl font-bold text-green-900 tracking-wide">
+                                        設計者：壽豐鄉部落健康營造中心
+                                    </p>
+                                </div>
+
+                                {/* 底部可愛裝飾 */}
+                                <div className="flex space-x-8 mt-8">
+                                    <i className="fas fa-apple-alt text-red-500 text-5xl animate-pulse"></i>
+                                    <i className="fas fa-seedling text-green-600 text-5xl"></i>
+                                    <i className="fas fa-heart text-pink-500 text-5xl animate-pulse"></i>
+                                </div>
+                            </div>
+
+                            {/* 圓形路徑上的格子 */}
+                            {boardCells.map((cell, index) => {
+                                const total = boardCells.length;
+                                // 從正上方(12點鐘方向)開始排列：-90度 = -PI/2
+                                const angle = (index / total) * 2 * Math.PI - (Math.PI / 2);
+                                // 將半徑設為 44%，留出一點邊距
+                                const radius = 44; 
+                                const left = `calc(50% + ${radius * Math.cos(angle)}%)`;
+                                const top = `calc(50% + ${radius * Math.sin(angle)}%)`;
+
+                                // 找出停在這格的玩家
+                                const cellPlayers = players.filter(p => p.pos === index);
+
+                                return (
+                                    <div key={index} className="absolute z-10" style={{ left, top, transform: 'translate(-50%, -50%)' }}>
+                                        <div className={`relative w-20 h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 rounded-2xl border-4 ${cell.color} shadow-lg flex flex-col items-center justify-center bg-white transition-transform duration-300 transform hover:scale-125 hover:z-30 cursor-default`}>
+                                            <div className="absolute top-1 left-2 text-sm lg:text-base font-bold text-gray-400">{index}</div>
+                                            <i className={`fas ${cell.icon} text-3xl lg:text-4xl mb-1 opacity-80 drop-shadow-sm`}></i>
+                                            <span className="text-sm lg:text-xl font-bold tracking-wider">{cell.label}</span>
+                                            
+                                            {/* 玩家棋子 - 放在格子底部外側 */}
+                                            <div className="absolute -bottom-4 lg:-bottom-6 flex flex-wrap justify-center w-full px-1 gap-1 lg:gap-2">
+                                                {cellPlayers.map(p => (
+                                                    <div key={p.id} 
+                                                        className="w-6 h-6 lg:w-8 lg:h-8 rounded-full border-[3px] border-white shadow-md animate-bounce flex items-center justify-center"
+                                                        style={{ backgroundColor: p.color }}>
+                                                        <span className="text-white text-[10px] lg:text-xs font-bold">{p.id}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Modal 疊加層 */}
+                    {activeCard && <CardModal card={activeCard.card} type={activeCard.type} onAction={handleCardAction} />}
+                    {winner && <WinnerModal winner={winner} onRestart={onRestart} />}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [gameConfig, setGameConfig] = React.useState(null);
+
+            const handleStart = (config) => {
+                setGameConfig(config);
+            };
+
+            const handleRestart = () => {
+                setGameConfig(null);
+            };
+
+            return (
+                <div className="antialiased">
+                    {!gameConfig ? (
+                        <SetupScreen onStart={handleStart} />
+                    ) : (
+                        <GameScreen config={gameConfig} onRestart={handleRestart} />
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
